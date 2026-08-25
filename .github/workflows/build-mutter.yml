@@ -1,0 +1,170 @@
+name: Build Mutter Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      distribution:
+        description: 'Linux Distribution'
+        required: true
+        default: 'Ubuntu 26.04'
+        type: choice
+        options:
+          - Debian 13
+          - Ubuntu 26.04
+      ref:
+        description: 'Ref'
+        required: true
+        default: 'main'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  debian-trixie:
+    if: ${{ inputs.distribution == 'Debian 13' }}
+    runs-on: ubuntu-26.04-arm
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    container:
+      image: debian:trixie
+      options: --privileged --user root
+
+    steps:
+      - name: Install dependencies
+        run: |
+          apt update
+          apt install -y git ccache build-essential devscripts fakeroot quilt git-buildpackage pristine-tar
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Set release name suffix
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          short_hash=$(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD)
+          echo "MUTTER_RELEASE_NAME_SUFFIX=${short_hash}_debian_trixie_arm64" >> "$GITHUB_ENV"
+
+      - name: Build and install Mutter packages
+        shell: bash
+        run: |
+          chmod +x producers/gnome/Debian13_v5/build.sh
+          producers/gnome/Debian13_v5/build.sh
+
+      - name: Collect packages for debug
+        shell: bash
+        run: |
+          build_dir="$HOME/anland-debbuild"
+          echo "Calculating sha256 checksums..."
+          find "$build_dir" -type f -name '*.deb' -print0 |
+            xargs -0 sha256sum | sort -k2 > "$HOME/sha256sums_debug.txt"
+          test -s "$HOME/sha256sums_debug.txt"
+          cat "$HOME/sha256sums_debug.txt"
+
+      - name: Upload build artifacts for debug
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutter_${{ env.MUTTER_RELEASE_NAME_SUFFIX }}_debug
+          path: |
+            ~/anland-debbuild/**/*.deb
+            ~/sha256sums_debug.txt
+          retention-days: 90
+
+      - name: Collect packages
+        shell: bash
+        run: |
+          build_dir="$HOME/anland-debbuild"
+          find "$build_dir" -type f -name '*.deb' \
+            \( -name '*dev*' -o -name '*dbgsym*' -o -name '*test*' \) -delete
+          echo "Calculating sha256 checksums..."
+          find "$build_dir" -type f -name '*.deb' -print0 |
+            xargs -0 sha256sum | sort -k2 > "$HOME/sha256sums.txt"
+          test -s "$HOME/sha256sums.txt"
+          cat "$HOME/sha256sums.txt"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutter_${{ env.MUTTER_RELEASE_NAME_SUFFIX }}
+          path: |
+            ~/anland-debbuild/**/*.deb
+            ~/sha256sums.txt
+          retention-days: 90
+
+  ubuntu-resolute:
+    if: ${{ inputs.distribution == 'Ubuntu 26.04' }}
+    runs-on: ubuntu-26.04-arm
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    container:
+      image: ubuntu:resolute
+      options: --privileged --user root
+
+    steps:
+      - name: Install dependencies
+        run: |
+          apt update
+          apt install -y git ccache build-essential devscripts fakeroot quilt git-buildpackage pristine-tar
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Set release name suffix
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          short_hash=$(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD)
+          echo "MUTTER_RELEASE_NAME_SUFFIX=${short_hash}_ubuntu_resolute_arm64" >> "$GITHUB_ENV"
+
+      - name: Build and install Mutter packages
+        shell: bash
+        run: |
+          chmod +x producers/gnome/Ubuntu2604_v5/build.sh
+          producers/gnome/Ubuntu2604_v5/build.sh
+
+      - name: Collect packages for debug
+        shell: bash
+        run: |
+          build_dir="$HOME/anland-debbuild"
+          echo "Calculating sha256 checksums..."
+          find "$build_dir" -type f -name '*.deb' -print0 |
+            xargs -0 sha256sum | sort -k2 > "$HOME/sha256sums_debug.txt"
+          test -s "$HOME/sha256sums_debug.txt"
+          cat "$HOME/sha256sums_debug.txt"
+
+      - name: Upload build artifacts for debug
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutter_${{ env.MUTTER_RELEASE_NAME_SUFFIX }}_debug
+          path: |
+            ~/anland-debbuild/**/*.deb
+            ~/sha256sums_debug.txt
+          retention-days: 90
+
+      - name: Collect packages
+        shell: bash
+        run: |
+          build_dir="$HOME/anland-debbuild"
+          find "$build_dir" -type f -name '*.deb' \
+            \( -name '*dev*' -o -name '*dbgsym*' -o -name '*test*' \) -delete
+          echo "Calculating sha256 checksums..."
+          find "$build_dir" -type f -name '*.deb' -print0 |
+            xargs -0 sha256sum | sort -k2 > "$HOME/sha256sums.txt"
+          test -s "$HOME/sha256sums.txt"
+          cat "$HOME/sha256sums.txt"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutter_${{ env.MUTTER_RELEASE_NAME_SUFFIX }}
+          path: |
+            ~/anland-debbuild/**/*.deb
+            ~/sha256sums.txt
+          retention-days: 90
